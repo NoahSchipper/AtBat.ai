@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "atbat-ai"
+version = "0.1.0"
+description = "Historical data and machine learning tools for a baseball at-bat simulator."
+requires-python = ">=3.10"
+dependencies = [
+    "scikit-learn>=1.4",
+]
+
+[project.scripts]
+download-lahman = "atbat.data.lahman:main"
+download-retrosheet = "atbat.data.retrosheet:main"
+build-plate-appearances = "atbat.data.combine:main"
+build-model-features = "atbat.data.features:main"
+train-models = "atbat.models.train:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
