@@ -11,11 +11,16 @@ dependencies = [
     "scikit-learn>=1.4",
 ]
 
+[project.optional-dependencies]
+statcast = ["pybaseball>=2.2"]
+
 [project.scripts]
 download-lahman = "atbat.data.lahman:main"
 download-retrosheet = "atbat.data.retrosheet:main"
+download-statcast = "atbat.data.statcast:main"
 build-plate-appearances = "atbat.data.combine:main"
 build-model-features = "atbat.data.features:main"
+build-power-features = "atbat.data.power_features:main"
 train-models = "atbat.models.train:main"
 
 [tool.setuptools.packages.find]

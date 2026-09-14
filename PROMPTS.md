@@ -69,3 +69,7 @@ lets do this
 ## 2026-09-14 11:52 -0500
 
 is it done?
+
+## 2026-09-14 13:14 -0500
+
+what suggestions do you have for getting power features

@@ -142,8 +142,63 @@ breakdown shows the models are still essentially only distinguishing
 `ball_in_play_out`, `strikeout`, and `walk_hbp` well; recall for `single`,
 `double`, `home_run`, and `triple` is close to zero. This means the current
 feature set (rolling career/split rates + game state + weather) is not yet
-separating power/contact outcomes from generic outs. Likely next steps:
-richer batter/pitcher power indicators (e.g. isolated power, barrel rate
-proxies), park factors by outcome type, and probability-aware evaluation
-(e.g. top-k or expected-value metrics) rather than hard classification
-accuracy for rare classes.
+separating power/contact outcomes from generic outs.
+
+### Statcast power features
+
+To add real batted-ball quality signal (exit velocity, launch angle,
+barrel/hard-hit rate) instead of relying only on outcome-rate history,
+install the optional `statcast` extra and pull Statcast data via
+[pybaseball](https://github.com/jldbc/pybaseball):
+
+```text
+python -m pip install -e ".[statcast]"
+download-statcast crosswalk --output data/raw/statcast/id_crosswalk.csv
+download-statcast season 2019 --output data/raw/statcast/2019_batted_balls.csv
+download-statcast season 2021 --output data/raw/statcast/2021_batted_balls.csv
+download-statcast season 2022 --output data/raw/statcast/2022_batted_balls.csv
+download-statcast season 2023 --output data/raw/statcast/2023_batted_balls.csv
+```
+
+Statcast keys players by MLBAM ID, not Retrosheet ID, so `crosswalk`
+downloads the Chadwick Bureau MLBAM↔Retrosheet ID mapping once, and each
+`season` download pulls only batted-ball events (`type == "X"`) for that
+year. Then join the power stats onto the existing feature table:
+
+```text
+build-power-features `
+  --features data/processed/model_features.csv `
+  --batted-balls data/raw/statcast/2019_batted_balls.csv data/raw/statcast/2021_batted_balls.csv data/raw/statcast/2022_batted_balls.csv data/raw/statcast/2023_batted_balls.csv `
+  --crosswalk data/raw/statcast/id_crosswalk.csv `
+  --output data/processed/model_features_with_power.csv
+```
+
+This adds `batter_*_prior` and `pitcher_allowed_*_prior` columns for batted
+ball count, average exit velocity, average launch angle, barrel rate, and
+hard-hit rate (>=95 mph). Because Statcast events can't be reliably ordered
+against Retrosheet plays within the same game, a row's "prior" power stats
+only include batted balls from strictly earlier game dates (same-day games
+are excluded), which keeps the join leakage-safe at the cost of some
+same-day resolution. Match rate against the crosswalk is high in practice
+(~99.8% of batters, ~99.1% of pitchers have a resolvable prior snapshot).
+
+Re-running the same season-holdout benchmark on
+`model_features_with_power.csv` (now with a `power_features` feature group)
+shows only a marginal improvement: Brier score and log loss both improve
+slightly (e.g. gradient boosting Brier 0.5971 → 0.5961, log loss 1.1883 →
+1.1852), but **accuracy stays flat (~54%) and per-outcome recall for
+`single`/`double`/`triple`/`home_run` is still effectively zero** even with
+real batted-ball-quality features included. This points to the "0% recall"
+metric being primarily an artifact of severe class imbalance combined with
+hard-label (argmax) classification, not a lack of signal — the model already
+knows *something* about power (Brier/log-loss did move), it just never has
+enough certainty to make a rare class the single most likely outcome. For a
+simulator, sampling from the predicted probability distribution rather than
+taking the argmax label is likely the right evaluation (and usage) approach;
+calibration curves / top-k metrics are a more informative next step than
+chasing hard-label recall on rare classes.
+
+Other candidate next steps if further signal is needed: park factors by
+outcome type, and Retrosheet's own batted-ball type flags (`ground`/`fly`/
+`line`) as rolling rates.
+

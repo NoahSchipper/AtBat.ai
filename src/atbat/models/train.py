@@ -34,13 +34,24 @@ def _number(value: str) -> float:
     return float(value) if value not in ("", None) else 0.0
 
 
+_POWER_SUFFIXES = (
+    "batted_balls_prior",
+    "avg_exit_velo_prior",
+    "avg_launch_angle_prior",
+    "barrel_rate_prior",
+    "hard_hit_rate_prior",
+)
+
+
 def _feature_groups(columns: list[str]) -> dict[str, list[str]]:
+    power = [column for column in columns if column.endswith(_POWER_SUFFIXES)]
     history = [
         column
         for column in columns
         if column.startswith(("batter_", "pitcher_"))
         and not column.startswith(("batter_vs_", "pitcher_vs_"))
         and column.endswith(("_prior", "_rate_prior"))
+        and column not in power
     ]
     matchup = [
         column
@@ -57,12 +68,15 @@ def _feature_groups(columns: list[str]) -> dict[str, list[str]]:
         for column in ("temp", "windspeed", "attendance")
         if column in columns
     ]
-    return {
+    groups = {
         "game_state": game_state,
         "player_history": history,
         "handedness_splits": matchup,
         "environment": environment,
     }
+    if power:
+        groups["power_features"] = power
+    return groups
 
 
 def _brier_score(probabilities: np.ndarray, y_test: np.ndarray, ordered_labels: list[str]) -> float:
@@ -233,7 +247,7 @@ def train(
             ordered_labels,
             model_name="histogram_gradient_boosting",
         )
-        tree_result["feature_group"] = "through_environment"
+        tree_result["feature_group"] = f"through_{list(groups)[-1]}"
         results.append(tree_result)
 
     output.parent.mkdir(parents=True, exist_ok=True)
